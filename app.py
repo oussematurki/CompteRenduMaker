@@ -113,6 +113,8 @@ class WorkshopApp:
                 })
 
             self.compile_btn.config(state=tk.NORMAL)
+            # Bind scrolling to the scrollable frame and its contents
+            self._bind_mouse_scroll(self.scrollable_frame)
 
     def show_preview(self, img_path):
         try:
@@ -205,6 +207,39 @@ class WorkshopApp:
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate PDF:\n{str(e)}")
+
+    def _on_mousewheel(self, event):
+        # Handle Windows / macOS / Touchpad smooth scroll events
+        if hasattr(event, 'delta') and event.delta != 0:
+            # On Windows, event.delta is typically multiples of 120.
+            # On some Linux touchpads, delta can be fractional or smaller pixel values.
+            if abs(event.delta) >= 120:
+                amount = int(-1 * (event.delta / 120))
+                self.canvas.yview_scroll(amount, "units")
+            else:
+                # For smooth touchpad scrolling, scroll by pixels directly
+                self.canvas.yview_scroll(int(-1 * event.delta), "pixels")
+        
+        # Handle traditional Linux mouse wheel clicks (Button-4 / Button-5)
+        elif event.num == 4:
+            self.canvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            self.canvas.yview_scroll(1, "units")
+
+    def _bind_mouse_scroll(self, widget):
+        # Bind mouse wheel to widget and all its children recursively
+        widget.bind("<MouseWheel>", self._on_mousewheel, add="+")
+        widget.bind("<Button-4>", self._on_mousewheel, add="+")
+        widget.bind("<Button-5>", self._on_mousewheel, add="+")
+        for child in widget.winfo_children():
+            self._bind_mouse_scroll(child)
+
+    def _unbind_mouse_scroll(self, widget):
+        widget.unbind("<MouseWheel>")
+        widget.unbind("<Button-4>")
+        widget.unbind("<Button-5>")
+        for child in widget.winfo_children():
+            self._unbind_mouse_scroll(child)
 
 
 if __name__ == "__main__":
