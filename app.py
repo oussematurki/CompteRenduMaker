@@ -9,7 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RL
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 def natural_sort_key(path):
-    """Ensures files like 2.png sort before 10.png."""
+    """Ensures files like 2.png sort naturally before 10.png."""
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'([0-9]+)', path.name)]
 
 class WorkshopApp:
@@ -76,6 +76,7 @@ class WorkshopApp:
 
         self.sections = []  # List of section dictionaries
         self.current_photo = None
+        self.last_dir = Path.home()  # Remembers the last used directory for file dialogs
 
     def clear_workspace(self):
         for widget in self.scrollable_frame.winfo_children():
@@ -84,9 +85,10 @@ class WorkshopApp:
         self.preview_label.config(image="", text="Select an image to preview", fg="gray")
 
     def load_folder(self):
-        folder_path = filedialog.askdirectory()
+        folder_path = filedialog.askdirectory(initialdir=str(self.last_dir))
         if folder_path:
             folder = Path(folder_path)
+            self.last_dir = folder
             self.source_label.config(text=f"Folder: {folder.name}", fg="black")
             self.clear_workspace()
 
@@ -101,7 +103,6 @@ class WorkshopApp:
                 self.compile_btn.config(state=tk.DISABLED)
                 return
 
-            # Create one section per image
             for idx, img in enumerate(image_files):
                 self.add_section(default_question=f"Question {idx + 1}", initial_images=[img])
 
@@ -111,9 +112,11 @@ class WorkshopApp:
     def load_files(self):
         file_paths = filedialog.askopenfilenames(
             title="Select Screenshots",
+            initialdir=str(self.last_dir),
             filetypes=[("Image files", "*.png *.jpg *.jpeg")]
         )
         if file_paths:
+            self.last_dir = Path(file_paths[0]).parent
             self.source_label.config(text=f"{len(file_paths)} files selected", fg="black")
             self.clear_workspace()
 
@@ -122,8 +125,9 @@ class WorkshopApp:
             if not image_files:
                 return
 
-            # Put all selected individual files into a clean initial section together
-            self.add_section(default_question="Question 1", initial_images=image_files)
+            # Create an individual section for each selected individual file
+            for idx, img in enumerate(image_files):
+                self.add_section(default_question=f"Question {idx + 1}", initial_images=[img])
 
             self.compile_btn.config(state=tk.NORMAL)
             self._bind_mouse_scroll(self.scrollable_frame)
@@ -134,7 +138,6 @@ class WorkshopApp:
         if default_question is None:
             default_question = f"Question {len(self.sections) + 1}"
 
-        # Frame for this question group (using pack)
         row_frame = tk.LabelFrame(self.scrollable_frame, text=f"Section {len(self.sections) + 1}", padx=8, pady=8)
         row_frame.pack(fill=tk.X, padx=5, pady=6, expand=True)
 
@@ -146,7 +149,6 @@ class WorkshopApp:
             "listbox": None
         }
 
-        # Top row controls inside section (Delete section button)
         top_ctrls = tk.Frame(row_frame)
         top_ctrls.pack(fill=tk.X, anchor="e", pady=(0, 4))
         
@@ -154,7 +156,6 @@ class WorkshopApp:
                                 command=lambda s=section_data: self.remove_section(s))
         del_sec_btn.pack(side=tk.RIGHT)
 
-        # Question Header Row
         q_frame = tk.Frame(row_frame)
         q_frame.pack(fill=tk.X, pady=2)
         tk.Label(q_frame, text="Question / Header:", width=16, anchor="w").pack(side=tk.LEFT, padx=5)
@@ -163,7 +164,6 @@ class WorkshopApp:
         q_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         section_data["question"] = q_entry
 
-        # Explanation Notes Row
         n_frame = tk.Frame(row_frame)
         n_frame.pack(fill=tk.X, pady=2)
         tk.Label(n_frame, text="Explanation Notes:", width=16, anchor="nw").pack(side=tk.LEFT, padx=5, anchor="n")
@@ -171,7 +171,6 @@ class WorkshopApp:
         n_text.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         section_data["notes"] = n_text
 
-        # Images Management Sub-frame
         img_frame = tk.LabelFrame(row_frame, text="Attached Screenshots", padx=5, pady=5)
         img_frame.pack(fill=tk.X, padx=5, pady=5)
 
@@ -187,7 +186,6 @@ class WorkshopApp:
         
         section_data["listbox"] = listbox
 
-        # Image action buttons column
         btn_col = tk.Frame(img_frame)
         btn_col.pack(side=tk.RIGHT, fill=tk.Y, padx=5)
 
@@ -203,13 +201,10 @@ class WorkshopApp:
         down_btn = tk.Button(btn_col, text="⬇ Down", command=lambda s=section_data: self.move_image(s, 1))
         down_btn.pack(fill=tk.X, pady=2)
 
-        # Populate listbox
         self.refresh_image_listbox(section_data)
 
-        # Bind selection event on listbox to show preview
         listbox.bind("<<ListboxSelect>>", lambda e, s=section_data: self.on_listbox_select(s))
 
-        # Bind focus-in for text fields to preview the first image if available
         for widget in (q_entry, n_text):
             widget.bind("<FocusIn>", lambda e, s=section_data: self.preview_first_image(s))
 
@@ -233,9 +228,11 @@ class WorkshopApp:
     def add_image_to_section(self, section_data):
         file_paths = filedialog.askopenfilenames(
             title="Add Screenshots",
+            initialdir=str(self.last_dir),
             filetypes=[("Image files", "*.png *.jpg *.jpeg")]
         )
         if file_paths:
+            self.last_dir = Path(file_paths[0]).parent
             for f in file_paths:
                 section_data["images"].append(Path(f))
             self.refresh_image_listbox(section_data)
@@ -258,7 +255,6 @@ class WorkshopApp:
         
         images = section_data["images"]
         if 0 <= new_idx < len(images):
-            # Swap
             images[idx], images[new_idx] = images[new_idx], images[idx]
             self.refresh_image_listbox(section_data)
             lb.selection_set(new_idx)
@@ -327,21 +323,16 @@ class WorkshopApp:
                 n_text = section["notes"].get("1.0", tk.END).strip()
                 images = section["images"]
 
-                # 1. Add Question Header
                 if q_text:
                     story.append(Paragraph(q_text, header_style))
 
-                # 2. Add all screenshots attached to this section with strict bounds
                 for img_path in images:
                     if img_path.exists():
                         img = RLImage(str(img_path))
-                        
                         maxWidth = 500
-                        maxHeight = 450  # Prevent tall images from overflowing a single page
+                        maxHeight = 450
                         
                         orig_width, orig_height = img.imageWidth, img.imageHeight
-                        
-                        # Scale down by width if it exceeds maxWidth
                         if orig_width > maxWidth:
                             aspect = orig_height / float(orig_width)
                             img.drawWidth = maxWidth
@@ -350,7 +341,6 @@ class WorkshopApp:
                             img.drawWidth = orig_width
                             img.drawHeight = orig_height
 
-                        # Secondary check: if height still exceeds maxHeight, scale down further
                         if img.drawHeight > maxHeight:
                             aspect = img.drawWidth / float(img.drawHeight)
                             img.drawHeight = maxHeight
@@ -359,7 +349,6 @@ class WorkshopApp:
                         story.append(img)
                         story.append(Spacer(1, 6))
 
-                # 3. Add Explanation Notes
                 if n_text:
                     story.append(Spacer(1, 4))
                     story.append(Paragraph(n_text, body_style))
