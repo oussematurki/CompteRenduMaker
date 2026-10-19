@@ -152,10 +152,18 @@ class WorkshopApp:
         top_ctrls = tk.Frame(row_frame)
         top_ctrls.pack(fill=tk.X, anchor="e", pady=(0, 4))
         
-        del_sec_btn = tk.Button(top_ctrls, text="❌ Delete Section", fg="red", font=("Arial", 8), 
+        del_sec_btn = tk.Button(top_ctrls, text="❌ Delete", fg="red", font=("Arial", 8), 
                                 command=lambda s=section_data: self.remove_section(s))
-        del_sec_btn.pack(side=tk.RIGHT)
+        del_sec_btn.pack(side=tk.RIGHT, padx=2)
 
+        down_sec_btn = tk.Button(top_ctrls, text="⬇ Move Down", font=("Arial", 8), 
+                                 command=lambda s=section_data: self.move_section(s, 1))
+        down_sec_btn.pack(side=tk.RIGHT, padx=2)
+
+        up_sec_btn = tk.Button(top_ctrls, text="⬆ Move Up", font=("Arial", 8), 
+                               command=lambda s=section_data: self.move_section(s, -1))
+        up_sec_btn.pack(side=tk.RIGHT, padx=2)
+        
         q_frame = tk.Frame(row_frame)
         q_frame.pack(fill=tk.X, pady=2)
         tk.Label(q_frame, text="Question / Header:", width=16, anchor="w").pack(side=tk.LEFT, padx=5)
@@ -211,6 +219,25 @@ class WorkshopApp:
         self.sections.append(section_data)
         self.compile_btn.config(state=tk.NORMAL)
         self._bind_mouse_scroll(self.scrollable_frame)
+
+    def move_section(self, section_data, direction):
+        idx = self.sections.index(section_data)
+        new_idx = idx + direction
+        if 0 <= new_idx < len(self.sections):
+            # Swap in the sections list
+            self.sections[idx], self.sections[new_idx] = self.sections[new_idx], self.sections[idx]
+            # Refresh the visual order and numbering
+            self.repack_sections()
+
+    def repack_sections(self):
+        # Detach all section frames
+        for section in self.sections:
+            section["frame"].pack_forget()
+        
+        # Re-pack them in the new order and update their header labels
+        for idx, section in enumerate(self.sections):
+            section["frame"].pack(fill=tk.X, padx=5, pady=6, expand=True)
+            section["frame"].config(text=f"Section {idx + 1}")
 
     def remove_section(self, section_data):
         section_data["frame"].destroy()
