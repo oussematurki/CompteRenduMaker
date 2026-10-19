@@ -1,3 +1,4 @@
+import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from pathlib import Path
@@ -76,7 +77,10 @@ class WorkshopApp:
 
         self.sections = []  # List of section dictionaries
         self.current_photo = None
-        self.last_dir = Path.home()  # Remembers the last used directory for file dialogs
+        self.config_path = Path(__file__).parent / "config.json"
+
+        # Unpack persistent input and output directories
+        self.last_dir, self.last_pdf_dir = self.load_last_dir()
 
     def clear_workspace(self):
         for widget in self.scrollable_frame.winfo_children():
@@ -84,11 +88,45 @@ class WorkshopApp:
         self.sections.clear()
         self.preview_label.config(image="", text="Select an image to preview", fg="gray")
 
+    def load_last_dir(self):
+        """Loads the last used input and output directories from config.json if they exist."""
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, "r") as f:
+                    data = json.load(f)
+                    
+                    # Load input path
+                    saved_path = Path(data.get("last_dir", Path.home()))
+                    input_dir = saved_path if saved_path.exists() else Path.home()
+                    
+                    # Load PDF save path
+                    saved_pdf_path = Path(data.get("last_pdf_dir", Path.home()))
+                    output_dir = saved_pdf_path if saved_pdf_path.exists() else Path.home()
+                    
+                    return input_dir, output_dir
+            except Exception:
+                pass
+        return Path.home(), Path.home()
+
+    def save_last_dir(self):
+        """Saves both the input directory and PDF export directory to config.json."""
+        try:
+            data = {
+                "last_dir": str(self.last_dir),
+                "last_pdf_dir": str(self.last_pdf_dir)
+            }
+            with open(self.config_path, "w") as f:
+                json.dump(data, f)
+        except Exception:
+            pass
+
     def load_folder(self):
         folder_path = filedialog.askdirectory(initialdir=str(self.last_dir))
         if folder_path:
             folder = Path(folder_path)
+            folder = Path(folder_path)
             self.last_dir = folder
+            self.save_last_dir()  # <--- Save persistence
             self.source_label.config(text=f"Folder: {folder.name}", fg="black")
             self.clear_workspace()
 
@@ -117,6 +155,7 @@ class WorkshopApp:
         )
         if file_paths:
             self.last_dir = Path(file_paths[0]).parent
+            self.save_last_dir()  # <--- Save persistence
             self.source_label.config(text=f"{len(file_paths)} files selected", fg="black")
             self.clear_workspace()
 
@@ -163,7 +202,7 @@ class WorkshopApp:
         up_sec_btn = tk.Button(top_ctrls, text="⬆ Move Up", font=("Arial", 8), 
                                command=lambda s=section_data: self.move_section(s, -1))
         up_sec_btn.pack(side=tk.RIGHT, padx=2)
-        
+
         q_frame = tk.Frame(row_frame)
         q_frame.pack(fill=tk.X, pady=2)
         tk.Label(q_frame, text="Question / Header:", width=16, anchor="w").pack(side=tk.LEFT, padx=5)
@@ -260,6 +299,7 @@ class WorkshopApp:
         )
         if file_paths:
             self.last_dir = Path(file_paths[0]).parent
+            self.save_last_dir()  # <--- Save persistence
             for f in file_paths:
                 section_data["images"].append(Path(f))
             self.refresh_image_listbox(section_data)
@@ -311,13 +351,18 @@ class WorkshopApp:
         pdf_path = filedialog.asksaveasfilename(
             defaultextension=".pdf",
             filetypes=[("PDF files", "*.pdf")],
-            title="Save Workshop PDF As"
+            title="Save Workshop PDF As",
+            initialdir=str(self.last_pdf_dir)  # Remembers last export folder
         )
         
         if not pdf_path:
             return  
 
         try:
+            # Save the parent folder of the chosen PDF destination path
+            self.last_pdf_dir = Path(pdf_path).parent
+            self.save_last_dir()
+
             doc = SimpleDocTemplate(
                 pdf_path,
                 pagesize=letter,
